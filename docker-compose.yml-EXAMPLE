@@ -1,5 +1,5 @@
 # Copy this file and set the dynamic parameters within to the root of the project
-version: '3.8'
+version: '3.7'
 services:
 
   #PHP Service
