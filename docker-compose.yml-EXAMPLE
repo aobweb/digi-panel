@@ -1,0 +1,67 @@
+# Copy this file and set the dynamic parameters within to the root of the project
+version: '3.7'
+services:
+
+  #PHP Service
+  digi-panel-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: digi-panel-php
+    container_name: digi-panel-app
+    restart: unless-stopped
+    tty: true
+    environment:
+      SERVICE_NAME: digi-panel-app
+      SERVICE_TAGS: dev
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+      - ./docker-service-configs/php/local.ini:/usr/local/etc/php/conf.d/local.ini
+    networks:
+      - digi-panel-network
+
+  #Nginx Service
+  digi-panel-web:
+    image: nginx:alpine
+    container_name: digi-panel-web
+    restart: unless-stopped
+    tty: true
+    ports:
+      - "{{WEB_PRIMARY_PORT}}:{{WEB_PRIMARY_PORT}}"
+      - "{{WEB_SECONDARY_PORT}}:{{WEB_SECONDARY_PORT}}"
+    volumes:
+      - ./:/var/www
+      - ./docker-service-configs/nginx/conf.d/:/etc/nginx/conf.d/
+    networks:
+      - digi-panel-network
+    depends_on:
+      - digi-panel-db
+
+  #MariaDB Service
+  digi-panel-db:
+    image: mariadb:10.5
+    container_name: digi-panel-db
+    restart: unless-stopped
+    tty: true
+    ports:
+      - "{{DB_PORT}}:{{DB_PORT}}"
+    environment:
+      MYSQL_DATABASE: digi-panel
+      MYSQL_ROOT_PASSWORD: {{DB_ROOT_PASSWORD}}
+      SERVICE_TAGS: dev
+      SERVICE_NAME: digi-panel-db
+    volumes:
+      - digi-panel-dbdata:/var/lib/mysql
+      - ./docker-service-configs/mariadb/my.cnf:/etc/mysql/my.cnf
+    networks:
+      - digi-panel-network
+
+#Docker Networks
+networks:
+  digi-panel-network:
+    driver: bridge
+#Volumes
+volumes:
+  digi-panel-dbdata:
+    driver: local

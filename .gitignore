@@ -1,7 +1,11 @@
+/.idea
 /vendor/
+/docker-service-configs/mariadb/my.cnf
+/docker-service-configs/nginx/conf.d/app.conf
 node_modules/
 npm-debug.log
 yarn-error.log
+docker-compose.yml
 
 # Laravel 4 specific
 bootstrap/compiled.php
