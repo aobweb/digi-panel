@@ -42,6 +42,7 @@ done
 
 echo "Please set the root password for MariaDB..."
 echo "[Press enter to leave blank]"
+echo
 read -rsp "Password: " rootPassword
 sed -i "s/{{DB_ROOT_PASSWORD}}/$rootPassword/g" docker-compose.yml
 echo "Password set successfully"
@@ -53,9 +54,10 @@ echo
 docker-compose up -d
 
 if docker ps | grep -E "digi-panel-app|digi-panel-web|digi-panel-db"; then
-    echo "Services installed successfully"
+    echo "Docker services setup successfully"
 else
-    echo "Failed to install services..."
+    echo "Failed to install docker services!"
+    exit
 fi
 
 if [ -d "./vendor/" ]; then
@@ -67,7 +69,23 @@ else
     if [ -d "./vendor/" ]; then
         echo "Dependencies successfully installed"
     else
-        echo "Failed to install local dependencies!"
+        echo "Failed to install dependencies!"
         exit
     fi
 fi
+
+echo "Checking database is successfully created..."
+if docker-compose exec digi-panel-app mysql -u root -p rootPassword -e "SHOW DATABASES;" | grep "laravel"; then
+    echo "Database exists..."
+else
+    echo "Database could not be found!"
+    exit
+fi
+
+echo "Creating separate database user for the application..."
+echo "Please set a password for the user"
+echo "[Press enter to leave blank]"
+echo
+read -rsp "Password: " dbPassword
+docker-compose exec digi-panel-app mysql -u root -p rootPassword -e "GRANT ALL ON laravel.* TO 'digiuser'@'%' IDENTIFIED BY '$dbPassword';"
+docker-compose exec digi-panel-app mysql -u root -p rootPassword -e "FLUSH PRIVILEGES;"
