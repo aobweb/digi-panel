@@ -52,7 +52,7 @@ services:
       SERVICE_TAGS: dev
       SERVICE_NAME: digi-panel-db
     volumes:
-      - digi-panel-dbdata:/var/lib/mysql
+      - dbdata:/var/lib/mysql
       - ./docker-service-configs/mariadb/my.cnf:/etc/mysql/my.cnf
     networks:
       - digi-panel-network
@@ -63,5 +63,5 @@ networks:
     driver: bridge
 #Volumes
 volumes:
-  digi-panel-dbdata:
+  dbdata:
     driver: local
