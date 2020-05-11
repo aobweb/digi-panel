@@ -17,6 +17,28 @@ function checkAndSetPorts() {
     done
 }
 
+function setupConfigs() {
+    echo "Setting up MariaDB config..."
+    if ! rsync ./docker-service-configs/mariadb/my.cnf-EXAMPLE ./docker-service-configs/mariadb/my.cnf; then
+        echo "Could not create MariaDB config..."
+        exit
+    fi
+
+    echo "Setting up nginx config..."
+    if ! rsync ./docker-service-configs/nginx/conf.d/app.conf-EXAMPLE ./docker-service-configs/nginx/conf.d/app.conf; then
+        echo "Could not create Nginx config..."
+        exit
+    fi
+
+    if sed -i "s/{{WEB_PRIMARY_PORT}}/$httpPort/g" ./docker-service-configs/nginx/conf.d/app.conf &&
+       sed -i "s/{{WEB_SECONDARY_PORT}}/$httpsPort/g" ./docker-service-configs/nginx/conf.d/app.conf; then
+           echo "Configs setup complete"
+    else
+        echo "Could not setup Nginx config values..."
+        exit
+    fi
+}
+
 function checkDbConnection() {
     local counter=1
     local username=$1
@@ -83,6 +105,9 @@ requiredPorts=("httpPort" "httpsPort" "dbPort")
 for port in "${requiredPorts[@]}"; do
     checkAndSetPorts "$port" "${!port}"
 done
+
+echo "Setting up docker service configs..."
+setupConfigs
 
 echo "Setting up docker-compose file..."
 rsync ./docker-compose.yml-EXAMPLE ./docker-compose.yml
