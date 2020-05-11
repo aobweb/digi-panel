@@ -5,7 +5,7 @@ if ! docker ps -a | grep -i "digi-panel-.*"; then
 fi
 
 echo "Stopping and removing containers..."
-if docker container stop digi-panel-app digi-panel-web digi-panel-db | docker container rm; then
+if docker container stop digi-panel-app digi-panel-web digi-panel-db && docker container rm "$_"; then
     echo "Validating operation success..."
     if ! docker ps -a | grep "digi-panel-.*"; then
         echo "Containers successfully removed"
