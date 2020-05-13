@@ -7,9 +7,10 @@ if ! docker ps -a | grep -i "digi-panel-.*"; then
 fi
 
 echo "Stopping and removing containers..."
-if docker container stop digi-panel-app digi-panel-web digi-panel-db && docker container rm digi-panel-app digi-panel-web digi-panel-db; then
+if docker container stop digi-panel-app digi-panel-web digi-panel-db >/dev/null &&
+   docker container rm digi-panel-app digi-panel-web digi-panel-db >/dev/null; then
     echo "Validating operation success..."
-    if ! docker ps -a | grep "digi-panel-.*"; then
+    if ! docker ps -a | grep "digi-panel-.*" >/dev/null; then
         echo "Containers successfully removed"
     fi
 else
@@ -17,11 +18,11 @@ else
     exit;
 fi
 
-if docker volume ls | grep -i "digi-panel.*"; then
+if docker volume ls | grep -i "digi-panel.*" >/dev/null; then
     echo "Would you also like to remove the database volume?"
     read -rp "[y/n] " input
 
-    if echo "$input" | grep -i ".*y.*"; then
+    if echo "$input" | grep -i ".*y.*" >/dev/null; then
         echo "Removing database volume..."
         if docker volume rm digi-panel_dbdata; then
             echo "Volume successfully removed"
