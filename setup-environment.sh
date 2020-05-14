@@ -17,26 +17,39 @@ function checkAndSetPorts() {
     done
 }
 
-function setupConfigs() {
-    echo "Setting up MariaDB config..."
-    if ! rsync ./docker-service-configs/mariadb/my.cnf-EXAMPLE ./docker-service-configs/mariadb/my.cnf; then
-        echo "Could not create MariaDB config..."
-        exit
-    fi
-
-    echo "Setting up nginx config..."
-    if ! rsync ./docker-service-configs/nginx/conf.d/app.conf-EXAMPLE ./docker-service-configs/nginx/conf.d/app.conf; then
-        echo "Could not create Nginx config..."
-        exit
-    fi
-
-    if sed -i "s/{{WEB_PRIMARY_PORT}}/$httpPort/g" ./docker-service-configs/nginx/conf.d/app.conf &&
-       sed -i "s/{{WEB_SECONDARY_PORT}}/$httpsPort/g" ./docker-service-configs/nginx/conf.d/app.conf; then
-           echo "Configs setup complete"
+function setupDockerConfigs() {
+    if ! [[ -f "./docker-service-configs/mariadb/my.cnf" ]]; then
+        echo "Setting up MariaDB config..."
+        if rsync ./docker-service-configs/mariadb/my.cnf-EXAMPLE ./docker-service-configs/mariadb/my.cnf; then
+            echo "MariaDB config successfully created..."
+        else
+            echo "Could not create MariaDB config..."
+            exit
+        fi
     else
-        echo "Could not setup Nginx config values..."
-        exit
+        echo "MariaDB config already exists..."
     fi
+
+    if ! [[ -f "./docker-service-configs/nginx/conf.d/app.conf" ]]; then
+        echo "Setting up Nginx config..."
+        if rsync ./docker-service-configs/nginx/conf.d/app.conf-EXAMPLE ./docker-service-configs/nginx/conf.d/app.conf; then
+            primaryPortResult=$(sed -i "s/{{WEB_PRIMARY_PORT}}/$httpPort/g" ./docker-service-configs/nginx/conf.d/app.conf)
+            secondaryPortResult=$(sed -i "s/{{WEB_SECONDARY_PORT}}/$httpsPort/g" ./docker-service-configs/nginx/conf.d/app.conf)
+            if [[ $primaryPortResult -gt 0 || $secondaryPortResult -gt 0 ]]; then
+                echo "Could not setup placeholder values for Nginx config..."
+                exit
+            fi
+
+            echo "Nginx config successfully created..."
+        else
+            echo "Could not create Nginx config..."
+            exit
+        fi
+    else
+        echo "Nginx config already exists..."
+    fi
+
+    echo "Docker configs setup complete"
 }
 
 function checkDbConnection() {
@@ -48,11 +61,11 @@ function checkDbConnection() {
     while [ "$counter" -lt "21" ]; do
         echo "Attempt $counter"
 
-        if docker-compose exec digi-panel-db mysql -u "$username" -p"$password" -e "SHOW DATABASES;" | grep -q 'digi-panel'; then
+        if docker exec digi-panel-db mysql -u "$username" -p"$password" -e "SHOW DATABASES;" | grep -q 'digi-panel'; then
             echo "digi-panel database exists"
             echo "Validating connection to digi-panel"
 
-            if docker-compose exec digi-panel-db mysql -u "$username" -p"$password" -e "SHOW TABLES FROM \`digi-panel\`;"; then
+            if docker exec digi-panel-db mysql -u "$username" -p"$password" -e "SHOW TABLES FROM \`digi-panel\`;"; then
                 break
             else
                 echo "Could not connect to the digi-panel database..."
@@ -62,6 +75,7 @@ function checkDbConnection() {
 
         echo "Could not connect. Retrying..."
         counter=$((counter + 1))
+        sleep 1
     done
 
     if [ "$counter" -ge "20" ]; then
@@ -95,42 +109,53 @@ function setupEnvFile() {
 }
 
 echo "Beginning local environment setup..."
-echo "Searching for free ports for the docker services"
+if docker ps -a | grep "digi-panel-.*"; then
+    echo "Service containers are already running. You need to stop the service if you want to restart it. You can do so with the remove-environment.sh script"
+    exit
+else
+    echo "Searching for free ports for the docker services"
 
-httpPort=80
-httpsPort=443
-dbPort=3306
-requiredPorts=("httpPort" "httpsPort" "dbPort")
+    httpPort=80
+    httpsPort=443
+    dbPort=3306
+    requiredPorts=("httpPort" "httpsPort" "dbPort")
 
-for port in "${requiredPorts[@]}"; do
-    checkAndSetPorts "$port" "${!port}"
-done
+    for port in "${requiredPorts[@]}"; do
+        checkAndSetPorts "$port" "${!port}"
+    done
+fi
 
-echo "Setting up docker service configs..."
-setupConfigs
+# Setup docker service configs
+setupDockerConfigs
 
-echo "Setting up docker-compose file..."
-rsync ./docker-compose.yml-EXAMPLE ./docker-compose.yml
+# Setup docker compose file
+if [[ -f "./docker-compose.yml" ]]; then
+    echo "Docker compose file found. Skipping generation..."
+    echo "Getting MariaDB root password from compose file..."
+    rootPassword=$(awk '/MYSQL_ROOT_PASSWORD:/ {print $2}' docker-compose.yml)
+    # TODO check if root password is missing from docker-compose.yml and ask user to input new password to set in compose file
+else
+    echo "Setting up docker-compose file..."
+    rsync ./docker-compose.yml-EXAMPLE ./docker-compose.yml
 
-echo "Setting up ports"
-placeholderValues=([$httpPort]="{{WEB_PRIMARY_PORT}}" [$httpsPort]="{{WEB_SECONDARY_PORT}}" [$dbPort]="{{DB_PORT}}")
+    echo "Setting up ports"
+    placeholderValues=([$httpPort]="{{WEB_PRIMARY_PORT}}" [$httpsPort]="{{WEB_SECONDARY_PORT}}" [$dbPort]="{{DB_PORT}}")
 
-for index in "${!placeholderValues[@]}"; do
-    echo "Setting ${placeholderValues[index]} to $index"
-    sed -i "s/${placeholderValues[index]}/$index/g" docker-compose.yml
-done
+    for index in "${!placeholderValues[@]}"; do
+        echo "Setting ${placeholderValues[index]} to $index"
+        sed -i "s/${placeholderValues[index]}/$index/g" docker-compose.yml
+    done
 
-echo "Please set the root password for MariaDB..."
-echo "[Press enter to leave blank]"
-echo
-read -rsp "Password: " rootPassword
-sed -i "s/{{DB_ROOT_PASSWORD}}/$rootPassword/g" docker-compose.yml
-echo
-echo "Password set successfully"
+    echo "Please set the root password for MariaDB..."
+    echo "[Press enter to leave blank]"
+    echo
+    read -rsp "Password: " rootPassword
+    sed -i "s/{{DB_ROOT_PASSWORD}}/$rootPassword/g" docker-compose.yml
+    echo
+    echo "Password set successfully"
+fi
 
 echo "Running docker-compose up..."
-echo
-echo
 docker-compose up -d
 
 if docker ps | grep -E "digi-panel-app|digi-panel-web|digi-panel-db"; then
@@ -141,12 +166,12 @@ else
 fi
 
 echo "Installing dependencies with composer install..."
-if [ -d "./vendor/" ]; then
+if [[ -d "./vendor/" ]]; then
     echo "Vendor folder already exists. Skipping..."
 else
     echo "Vendor folder not found. Executing composer install..."
     docker-compose exec --user www digi-panel-app /usr/local/bin/composer install
-    if [ -d "./vendor/" ]; then
+    if [[ -d "./vendor/" ]]; then
         echo "Dependencies successfully installed"
     else
         echo "Failed to install dependencies!"
@@ -157,25 +182,46 @@ fi
 echo "Checking database is successfully created..."
 checkDbConnection "root" "$rootPassword"
 
-echo "Creating separate database user for the application..."
+# Application db user will is always dropped and recreated to simplify setup
+dbUser="digiuser"
+echo "Dropping application DB user..."
+if ! docker exec digi-panel-db mysql -u root -p"$rootPassword" -e "DROP USER IF EXISTS '$dbUser'@'%';"; then
+    echo "Could not drop application DB user..."
+    exit
+fi
+echo "Creating new database user for the application..."
 echo "Please set a password for the user"
 echo "[Press enter to leave blank]"
 echo
 read -rsp "Password: " dbPassword
-docker-compose exec digi-panel-db mysql -u root -p"$rootPassword" -e "GRANT ALL ON \`digi-panel\`.* TO 'digiuser'@'%' IDENTIFIED BY '$dbPassword';"
-docker-compose exec digi-panel-db mysql -u root -p"$rootPassword" -e "FLUSH PRIVILEGES;"
+docker exec digi-panel-db mysql -u root -p"$rootPassword" -e "GRANT ALL ON \`digi-panel\`.* TO '$dbUser'@'%' IDENTIFIED BY '$dbPassword';"
+docker exec digi-panel-db mysql -u root -p"$rootPassword" -e "FLUSH PRIVILEGES;"
 echo
+
+# Setup laravel env config
+if [[ -f "./.env" ]]; then
+    echo "Laravel env config file found. Skipping generation and updating user password and db ports..."
+    oldHttpPort=$(awk -F ':' '/APP_URL/ {print $3}' .env)
+    oldDbPort=$(awk -F '=' '/DB_PORT=/ {print $2}' .env)
+    oldDbPassword=$(awk -F '=' '/DB_PASSWORD=/ {print $2}' .env)
+
+    sed -i "s/$oldHttpPort/$httpPort/g" .env
+    sed -i "s/$oldDbPort/$dbPort/g" .env
+    sed -i "s/$oldDbPassword/$dbPassword/g" .env
+else
+    echo "Setting up .env file"
+    setupEnvFile $dbUser
+
+    echo "Executing finishing touches..."
+    echo "Generating laravel key..."
+    docker exec digi-panel-app php artisan key:generate
+    echo "Running laravel migrate..."
+    docker exec digi-panel-app php artisan migrate
+fi
+
 echo "Verifying database connection with new user..."
-checkDbConnection "digiuser" "$dbPassword"
+checkDbConnection $dbUser "$dbPassword"
 
-echo "Setting up .env file"
-setupEnvFile "digiuser"
-
-echo "Executing finishing touches..."
-echo "Generating laravel key..."
-docker-compose exec digi-panel-app php artisan key:generate
-echo "Running laravel migrate..."
-docker-compose exec digi-panel-app php artisan migrate
 echo "Validating application db connection"
 if echo "DB::connection()->getPdo();" | docker-compose exec -T digi-panel-app php artisan tinker; then # Disable TTY allocation otherwise error is thrown
     echo "Laravel DB connection successful"
