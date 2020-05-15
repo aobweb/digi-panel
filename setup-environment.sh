@@ -182,7 +182,7 @@ fi
 echo "Checking database is successfully created..."
 checkDbConnection "root" "$rootPassword"
 
-# Application db user will is always dropped and recreated to simplify setup
+# Application db user is always dropped and recreated to simplify setup
 dbUser="digiuser"
 echo "Dropping application DB user..."
 if ! docker exec digi-panel-db mysql -u root -p"$rootPassword" -e "DROP USER IF EXISTS '$dbUser'@'%';"; then
