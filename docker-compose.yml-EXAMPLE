@@ -28,8 +28,8 @@ services:
     restart: unless-stopped
     tty: true
     ports:
-      - "{{WEB_PRIMARY_PORT}}:{{WEB_PRIMARY_PORT}}"
-      - "{{WEB_SECONDARY_PORT}}:{{WEB_SECONDARY_PORT}}"
+      - {{WEB_PRIMARY_PORT}}:80
+      - {{WEB_SECONDARY_PORT}}:443
     volumes:
       - ./:/var/www
       - ./docker-service-configs/nginx/conf.d/:/etc/nginx/conf.d/
@@ -45,14 +45,14 @@ services:
     restart: unless-stopped
     tty: true
     ports:
-      - "{{DB_PORT}}:{{DB_PORT}}"
+      - {{DB_PORT}}:3306
     environment:
       MYSQL_DATABASE: digi-panel
       MYSQL_ROOT_PASSWORD: {{DB_ROOT_PASSWORD}}
       SERVICE_TAGS: dev
       SERVICE_NAME: digi-panel-db
     volumes:
-      - digi-panel-dbdata:/var/lib/mysql
+      - dbdata:/var/lib/mysql
       - ./docker-service-configs/mariadb/my.cnf:/etc/mysql/my.cnf
     networks:
       - digi-panel-network
@@ -63,5 +63,5 @@ networks:
     driver: bridge
 #Volumes
 volumes:
-  digi-panel-dbdata:
+  dbdata:
     driver: local
