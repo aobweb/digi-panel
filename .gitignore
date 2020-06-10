@@ -6,6 +6,7 @@ node_modules/
 npm-debug.log
 yarn-error.log
 docker-compose.yml
+/bootstrap/cache/
 
 # Laravel 4 specific
 bootstrap/compiled.php
